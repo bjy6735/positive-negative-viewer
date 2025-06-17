@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Positive ↔ Negative Viewer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+    }
+
+    #circle-btn {
+      position: absolute;
+      bottom: 5%;
+      left: 5%;
+      width: 12.5%;
+      aspect-ratio: 1;
+      background: rgba(255, 255, 255, 0.4);
+      border-radius: 50%;
+      cursor: pointer;
+      z-index: 10;
+      transition: background 0.3s;
+    }
+    #circle-btn:hover {
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    #upload {
+      position: absolute;
+      top: 20px;
+      left: 120px;
+      z-index: 15;
+      background: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #thumbnail-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100px;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      overflow-y: auto;
+      padding: 10px 5px;
+      box-sizing: border-box;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #thumbnail-bar img {
+      width: 100%;
+      border-radius: 6px;
+      cursor: pointer;
+      object-fit: cover;
+      aspect-ratio: 1;
+      transition: transform 0.2s;
+    }
+
+    #thumbnail-bar img:hover {
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div id="thumbnail-bar"></div>
+  <input type="file" id="upload" accept="image/*">
+  <div id="circle-btn"></div>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const btn = document.getElementById('circle-btn');
+    const uploadInput = document.getElementById('upload');
+    const thumbnailBar = document.getElementById('thumbnail-bar');
+
+    let img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/800px-PNG_transparency_demonstration_1.png';
+
+
+
+    let isNegative = false;
+    let hasDrawnCircle = false;
+    const thumbnails = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (img.complete) {
+        drawImage();
+      }
+    }
+
+    function drawImage() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const imgAspect = img.width / img.height;
+      const canvasAspect = canvas.width / canvas.height;
+
+      let drawWidth, drawHeight, offsetX, offsetY;
+
+      if (imgAspect > canvasAspect) {
+        drawWidth = canvas.width;
+        drawHeight = canvas.width / imgAspect;
+        offsetX = 0;
+        offsetY = (canvas.height - drawHeight) / 2;
+      } else {
+        drawHeight = canvas.height;
+        drawWidth = canvas.height * imgAspect;
+        offsetX = (canvas.width - drawWidth) / 2;
+        offsetY = 0;
+      }
+
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+
+      if (isNegative) {
+        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = 255 - data[i];
+          data[i + 1] = 255 - data[i + 1];
+          data[i + 2] = 255 - data[i + 2];
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        if (!hasDrawnCircle) {
+          const circleSize = Math.min(canvas.width, canvas.height) / 4;
+          const circleX = canvas.width * 0.0625 + circleSize / 2;
+          const circleY = canvas.height * 0.9375 - circleSize / 2;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(circleX, circleY, circleSize / 2, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+          ctx.restore();
+
+          hasDrawnCircle = true;
+        }
+      } else {
+        hasDrawnCircle = false;
+      }
+    }
+
+    function addThumbnail(dataUrl) {
+      if (thumbnails.length >= 5) {
+        thumbnails.shift();
+        thumbnailBar.removeChild(thumbnailBar.firstChild);
+      }
+
+      thumbnails.push(dataUrl);
+
+      const thumb = new Image();
+      thumb.src = dataUrl;
+      thumb.addEventListener('click', () => {
+        const newImg = new Image();
+        newImg.onload = () => {
+          img = newImg;
+          isNegative = false;
+          hasDrawnCircle = false;
+          drawImage();
+        };
+        newImg.src = dataUrl;
+      });
+
+      thumbnailBar.appendChild(thumb);
+    }
+
+    btn.addEventListener('click', () => {
+      isNegative = !isNegative;
+      drawImage();
+    });
+
+    uploadInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const newImg = new Image();
+          newImg.onload = () => {
+            img = newImg;
+            isNegative = false;
+            hasDrawnCircle = false;
+            drawImage();
+            addThumbnail(event.target.result);
+          };
+          newImg.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    img.onload = () => {
+      resizeCanvas();
+    };
+
+    window.addEventListener('resize', resizeCanvas);
+  </script>
+</body>
+</html>
